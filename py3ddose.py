@@ -2,11 +2,15 @@ import numpy
 
 
 class DoseFile(object):
-    def __init__(self, file_name):
+    def __init__(self, file_name, load_uncertainty=False):
+        """
+        Attempts to detect the dose file etension automatically. If an unknown
+        extension is detected, loads a .3ddose file by default.
+        """
         if file_name[-3:] == 'npz':
             self._load_npz(file_name)
-        elif file_name[-6:] == '3ddose':
-            self._load_3ddose(file_name)
+        else:
+            self._load_3ddose(file_name, load_uncertainty)
     
     def _load_npz(self, file_name):
         data = numpy.load(file_name)
@@ -19,25 +23,54 @@ class DoseFile(object):
         self.shape = self.dose.shape
         self.size = self.dose.size
     
-    def _load_3ddose(self, file_name):
+    def _load_3ddose(self, file_name, load_uncertainty=False):
         data = file(file_name).read().split('\n')
-        x, y, z = map(int, data[0].split())
-        self.shape = (z, x, y)
+        
+        cur_line = 0
+        
+        x, y, z = map(int, data[cur_line].split())
+        self.shape = (z, y, x)
         self.size = numpy.multiply.reduce(self.shape)
         
-        self.positions = [numpy.fromstring(data[i], sep=' ') for i in range(1, 4)]
+        cur_line += 1
+        
+        positions = []
+        for i in range(0,3):
+            bounds = []
+            while len(bounds) < self.shape[i]:
+                line_positions = map(float, data[cur_line].split())
+                bounds += line_positions
+                cur_line += 1
+            positions.append(bounds)
+        
+        self.positions = positions
         self.spacing = [numpy.diff(p) for p in self.positions]
         self.resolution = [s[0] for s in self.spacing if s.all()]      
         assert len(self.resolution) == 3, "Non-linear resolution in either x, y or z."
-
-        self.dose = numpy.fromstring(data[4], sep=' ')
+        
+        dose = []
+        while len(dose) < self.size:
+            line_data = map(float, data[cur_line].split())
+            dose += line_data
+            cur_line += 1
+        self.dose = numpy.array(dose)
+        assert len(self.dose) == self.size, "len of dose = {} (expect {})".format(len(self.dose), self.size)
+        
         self.dose = self.dose.reshape((self.shape))
         assert self.dose.size == self.size, "Dose array size does not match that specified."
-
-        self.uncertainty = numpy.fromstring(data[5], sep=' ')
-        self.uncertainty = self.uncertainty.reshape((self.shape))
-        assert self.uncertainty.size == self.size, "Uncertainty array size does not match that specified."
-
+        
+        if load_uncertainty:
+            uncertainty = []
+            while len(uncertainty) < self.size:
+                line_data = map(float, data[cur_line].split())
+                uncertainty += line_data
+                cur_line += 1
+            self.uncertainty = numpy.array(uncertainty)
+            assert len(self.uncertainty) == self.size, "len of uncertainty = {} (expected {})".format(len(self.uncertainty), self.size)
+            
+            self.uncertainty = self.uncertainty.reshape((self.shape))
+            assert self.uncertainty.size == self.size, "uncertainty array size does not match that specified."
+            
     def dump(self, file_name):
         numpy.savez(file_name, dose=self.dose, uncertainty=self.uncertainty,
             x_positions=self.positions[0], y_positions=self.positions[1],
@@ -60,15 +93,5 @@ class DoseFile(object):
     @property
     def z_extent(self):
         return self.positions[2][0], self.positions[2][-1]
-        
-        
-if __name__ == "__main__":
-    import pylab
-    import sys   
- 
-    data = DoseFile(sys.argv[1])
-    
-    pylab.matshow(data.dose[5,:,:], cmap=pylab.cm.gray, extent=data.x_extent + data.y_extent)
-    pylab.contour(data.dose[5,:,:], origin='upper', extent=data.x_extent + data.y_extent)
-    pylab.show()
+
     
