@@ -30,6 +30,8 @@ class DoseFile(object):
         
         x, y, z = map(int, data[cur_line].split())
         self.shape = (z, y, x)
+#         self.shape = (x,y,z)
+        print self.shape
         self.size = numpy.multiply.reduce(self.shape)
         
         cur_line += 1
@@ -37,7 +39,7 @@ class DoseFile(object):
         positions = []
         for i in range(0,3):
             bounds = []
-            while len(bounds) < self.shape[i]:
+            while len(bounds) < [x, y, z][i]:
                 line_positions = map(float, data[cur_line].split())
                 bounds += line_positions
                 cur_line += 1
@@ -94,4 +96,3 @@ class DoseFile(object):
     def z_extent(self):
         return self.positions[2][0], self.positions[2][-1]
 
-    
