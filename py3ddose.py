@@ -1,6 +1,5 @@
 import numpy
 
-
 class DoseFile(object):
     def __init__(self, file_name, load_uncertainty=False):
         """
@@ -45,9 +44,14 @@ class DoseFile(object):
                 cur_line += 1
             positions.append(bounds)
         
+        # recall that dimensions are read in order x, y, z
+        positions = [positions[2], positions[1], positions[0]]
+        
         self.positions = positions
         self.spacing = [numpy.diff(p) for p in self.positions]
-        self.resolution = [s[0] for s in self.spacing if s.all()]      
+        self.resolution = [s[0] for s in self.spacing if s.all()]
+        self.origin = numpy.add( [p[0] for p in positions], numpy.array(self.resolution)/2.)
+        
         assert len(self.resolution) == 3, "Non-linear resolution in either x, y or z."
         
         dose = []
@@ -95,4 +99,3 @@ class DoseFile(object):
     @property
     def z_extent(self):
         return self.positions[2][0], self.positions[2][-1]
-
